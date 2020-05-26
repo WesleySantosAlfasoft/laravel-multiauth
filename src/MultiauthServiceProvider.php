@@ -6,14 +6,10 @@ use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Database\Eloquent\Factory;
-use Bitfumes\Multiauth\Console\Commands\Install;
 use Bitfumes\Multiauth\Console\Commands\RoleCmd;
 use Bitfumes\Multiauth\Console\Commands\SeedCmd;
 use Bitfumes\Multiauth\Exception\MultiAuthHandler;
-use Bitfumes\Multiauth\Http\Middleware\AdminPermitTo;
 use Bitfumes\Multiauth\Providers\AuthServiceProvider;
-use Bitfumes\Multiauth\Console\Commands\PermissionCommand;
-use Bitfumes\Multiauth\Http\Middleware\AdminPermitToParent;
 use Bitfumes\Multiauth\Console\Commands\MakeMultiAuthCommand;
 use Bitfumes\Multiauth\Console\Commands\RollbackMultiAuthCommand;
 use Bitfumes\Multiauth\Http\Middleware\redirectIfAuthenticatedAdmin;
@@ -25,6 +21,7 @@ class MultiauthServiceProvider extends ServiceProvider
     {
         if ($this->canHaveAdminBackend()) {
             $this->loadViewsFrom(__DIR__ . '/views', 'multiauth');
+            $this->loadMigrationsFrom(__DIR__ . '/database/migrations');
             $this->registerRoutes();
             $this->publisheThings();
             $this->mergeAuthFileFrom(__DIR__ . '/../config/auth.php', 'auth');
@@ -86,7 +83,7 @@ class MultiauthServiceProvider extends ServiceProvider
         if (file_exists($routeDir)) {
             $appRouteDir = scandir($routeDir);
             if (!$this->app->routesAreCached()) {
-                $path = in_array("{$prefix}.php", $appRouteDir) ? base_path("routes/{$prefix}.php") : $path;
+                require in_array("{$prefix}.php", $appRouteDir) ? base_path("routes/{$prefix}.php") : $path;
             }
         }
 
@@ -102,8 +99,6 @@ class MultiauthServiceProvider extends ServiceProvider
     {
         app('router')->aliasMiddleware('admin', redirectIfAuthenticatedAdmin::class);
         app('router')->aliasMiddleware('role', redirectIfNotWithRoleOfAdmin::class);
-        app('router')->aliasMiddleware('permitTo', AdminPermitTo::class);
-        app('router')->aliasMiddleware('permitToParent', AdminPermitToParent::class);
     }
 
     protected function registerExceptionHandler()
@@ -144,7 +139,7 @@ class MultiauthServiceProvider extends ServiceProvider
             __DIR__ . '/views' => resource_path('views/vendor/multiauth'),
         ], 'multiauth:views');
         $this->publishes([
-            __DIR__ . '/database/factories' => database_path('factories'),
+            __DIR__ . '/factories' => database_path('factories'),
         ], 'multiauth:factories');
         $this->publishes([
             __DIR__ . '/../config/multiauth.php' => config_path('multiauth.php'),
@@ -162,37 +157,8 @@ class MultiauthServiceProvider extends ServiceProvider
             }
             $role = explode(',', $role);
             $role[] = 'super';
-            $roles = auth('admin')->user()->roles()->pluck('name');
+            $roles = auth('admin')->user()->/* @scrutinizer ignore-call */ roles()->pluck('name');
             $match = count(array_intersect($role, $roles->toArray()));
-
-            return (bool) $match;
-        });
-
-        Blade::if('permitTo', function ($permission) {
-            if (!auth('admin')->check()) {
-                return  false;
-            }
-            $permission = explode(',', $permission);
-            $permissions = auth('admin')->user()->allPermissions();
-            $permissions = array_map(function ($permission) {
-                return $permission['name'];
-            }, $permissions);
-            $match = count(array_intersect($permission, $permissions));
-
-            return !!$match;
-        });
-
-        Blade::if('permitToParent', function ($permission) {
-            if (!auth('admin')->check()) {
-                return  false;
-            }
-            $permission = explode(',', $permission);
-            $permissions = auth('admin')->user()->allPermissions();
-            $parent = array_map(function ($permission) {
-                return $permission['parent'];
-            }, $permissions);
-
-            $match = count(array_intersect($permission, $parent));
 
             return (bool) $match;
         });
@@ -214,8 +180,6 @@ class MultiauthServiceProvider extends ServiceProvider
             $this->commands([
                 MakeMultiAuthCommand::class,
                 RollbackMultiAuthCommand::class,
-                PermissionCommand::class,
-                Install::class,
             ]);
         }
     }

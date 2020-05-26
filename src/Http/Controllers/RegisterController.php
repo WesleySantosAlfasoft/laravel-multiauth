@@ -35,7 +35,8 @@ class RegisterController extends Controller
      */
     public function redirectTo()
     {
-        return $this->redirectTo = route('admin.show');
+        // return $this->redirectTo = route('admin.show');
+        return $this->redirectTo = URL('admin/add-admin');
     }
 
     /**
@@ -52,15 +53,16 @@ class RegisterController extends Controller
     public function showRegistrationForm()
     {
         $roles = Role::all();
-
-        return view('multiauth::admin.register', compact('roles'));
+         $admins = Admin::where('id', '!=', auth()->id())->get();
+        //return view('multiauth::admin.register', compact('roles'));
+        return view('multiauth::admin.add-admin', compact('roles','admins'));
     }
 
     public function register(AdminRequest $request)
     {
         event(new Registered($user = $this->create($request->all())));
 
-        return redirect($this->redirectPath());
+        return redirect($this->redirectPath())->with('message', "New admin details are successfully added");
     }
 
     /**
@@ -119,7 +121,7 @@ class RegisterController extends Controller
         $admin->update($request->except('role_id'));
         $admin->roles()->sync(request('role_id'));
 
-        return redirect(route('admin.show'))->with('message', "{$admin->name} details are successfully updated");
+        return redirect(URL('admin/add-admin'))->with('message', "{$admin->name} details are successfully updated");
     }
 
     public function destroy(Admin $admin)
@@ -127,6 +129,6 @@ class RegisterController extends Controller
         $prefix = config('multiauth.prefix');
         $admin->delete();
 
-        return redirect(route('admin.show'))->with('message', "You have deleted {$prefix} successfully");
+        return redirect(URL('admin/add-admin'))->with('message', "You have deleted {$prefix} successfully");
     }
 }
